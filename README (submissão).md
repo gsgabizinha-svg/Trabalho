@@ -9,19 +9,19 @@
 
 | Campo | Valor |
 |---|---|
-| Turma | <!-- PREENCHER: ex. 12DTAT --> |
-| Grupo | <!-- PREENCHER: ex. Grupo 07 --> |
-| Data de entrega | <!-- PREENCHER: DD/MM/AAAA --> |
+| Turma | 2º ano – 2DTATBB – 4ª Entrada |
+| Grupo | Grupo 33 |
+| Data de entrega | 10/10/2026 |
 
 ### Integrantes
 
 | Nome completo | RM | E-mail |
 |---|---|---|
-| <!-- PREENCHER --> | RM000000 | |
-| | | |
-| | | |
-| | | |
-| | | |
+| Angelica Fonseca de Freitas | RM377836 | angelicafonsecabb@gmail.com |
+| Fernanda de Oliveira Almeida | RM377812 | fernandaalmeida84@yahoo.com.br |
+| Gabriela Souza e Silva | RM377814 | gsgabizinha@gmail.com |
+| Juliana Oliveira Couto Espindola Vaz de Lima | RM377805 | juoliveiracouto@gmail.com |
+| William Vladimir Rosales Merida da Silva | RM377758 | wvmerida@gmail.com |
 
 ---
 
@@ -42,7 +42,12 @@ Estes três links são **obrigatórios** e devem ser idênticos aos do PDF de su
 
 ## 3. O problema
 
-<!-- PREENCHER: contexto de negócio e a motivação para o uso de Machine Learning. -->
+Conceder crédito é uma das atividades centrais de um banco, mas traz um risco: o cliente que **não paga**. Aprovar um mau pagador costuma custar muito mais do que recusar um bom cliente.
+Hoje essa análise depende de regras fixas e de revisão manual, que são lentas e pouco padronizadas. Com Machine Learning, o computador aprende com o histórico de milhares de clientes
+e estima a **chance de um novo solicitante atrasar o pagamento**, ajudando a padronizar e acelerar a triagem.
+
+**Objetivo:** classificar solicitantes de cartão de crédito como **bons** ou **maus pagadores** a partir dos dados do cadastro (renda, ocupação, estado civil, histórico de trabalho etc.).
+Em termos práticos, a pergunta que respondemos é: **as informações do cadastro permitem identificar clientes com maior chance de atrasar o pagamento?**
 
 ### Variável alvo
 
