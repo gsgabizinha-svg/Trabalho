@@ -1,11 +1,13 @@
-# Roteiro do vídeo (máx. 5 min) – acompanha os 7 slides
+# Roteiro do vídeo executivo (máx. 5 min)
+
+Acompanha os 7 slides de `apresentacao_executiva.pdf`. Linguagem sem jargão; cada integrante pode narrar um bloco.
 
 | Slide | Tempo | Fala sugerida |
 |---|---|---|
-| 1. Capa | 0:00–0:20 | "Somos o grupo [__]. Neste Tech Challenge desenvolvemos um modelo para prever se um solicitante de cartão de crédito será bom ou mau pagador." |
-| 2. Problema | 0:20–1:00 | "Aprovar um mau pagador custa mais do que recusar um bom. Trabalhamos com 36 mil clientes que têm cadastro e histórico de pagamento. Como não havia rótulo pronto, definimos mau pagador como quem teve atraso de 30 dias ou mais: 11,8% da base." |
-| 3. Abordagem | 1:00–2:00 | "Seguimos quatro etapas: limpeza, exploração, cinco modelos contra um baseline e avaliação rigorosa. Um ponto crítico: 73% dos clientes têm cadastro idêntico ao de outro. Por isso separamos treino e teste por perfil, para o modelo ser testado em perfis que nunca viu." |
-| 4. Resultados | 2:00–3:00 | "Todos os algoritmos ficaram com ROC-AUC entre 0,53 e 0,55, contra 0,50 do acaso. O campeão pela validação cruzada foi o Random Forest, mas as diferenças entre modelos não são estatisticamente relevantes. O limite está na informação, não no algoritmo." |
-| 5. Vazamento | 3:00–3:50 | "Se tivéssemos dividido aleatoriamente, o ROC-AUC seria 0,76, resultado que parece excelente. Mas 89% do teste tinha um perfil idêntico no treino: o modelo só memorizava. Com a validação correta, o valor real é 0,51." |
-| 6. Variáveis | 3:50–4:20 | "Idade, imóvel, veículo e tempo de emprego são as mais relevantes. A renda quase não discrimina. Os 20% de maior score têm cerca de 15% de maus contra 11,8% da média." |
-| 7. Recomendações | 4:20–5:00 | "Recomendamos usar o modelo como triagem complementar, enriquecer a base com bureau e dados comportamentais, e revisar o uso de gênero e idade por questões éticas. O repositório traz o pipeline reprodutível e todas as métricas."|
+| 1. Capa | 0:00–0:20 | "Somos o Grupo 01. Neste Tech Challenge construímos um modelo para prever se quem pede um cartão de crédito tende a ser um bom ou um mau pagador." |
+| 2. Problema | 0:20–1:00 | "Aprovar um mau pagador custa mais do que recusar um bom cliente. Analisamos 36 mil clientes com cadastro e histórico de pagamento. Consideramos mau pagador quem teve pelo menos um mês com 30 dias ou mais de atraso: cerca de 12% dos clientes." |
+| 3. Como fizemos | 1:00–2:00 | "Organizamos os dados, comparamos o perfil de bons e maus pagadores, testamos quatro modelos e os comparamos com uma regra simples de aprovar todo mundo. Um cuidado importante: os 36 mil clientes formam só 9,7 mil perfis diferentes. Por isso testamos o modelo apenas em perfis que ele nunca tinha visto." |
+| 4. Resultado | 2:00–3:00 | "A nota dos modelos ficou entre 0,53 e 0,55, em que 0,50 é um sorteio. Para detectar 2 de cada 3 maus pagadores, o modelo precisaria recusar 2 de cada 3 bons clientes. Ou seja, separa só um pouco melhor que o acaso." |
+| 5. Cuidado | 3:00–3:50 | "Se tivéssemos testado com perfis repetidos, a nota seria 0,76, um resultado que parece excelente. Mas o modelo estaria só reconhecendo perfis que já viu, como dar a prova com as respostas. Com o teste correto, a nota real é 0,51." |
+| 6. O que pesa | 3:50–4:20 | "As características que mais pesam são idade e ter imóvel próprio: quem é mais jovem e não tem imóvel atrasa um pouco mais. A renda quase não faz diferença. Mas os efeitos são pequenos." |
+| 7. Recomendações | 4:20–5:00 | "Recomendamos usar o modelo só como apoio ao analista, buscar mais informação, como histórico em bureaus de crédito, e revisar o uso de gênero e idade por questões éticas. O repositório traz todo o passo a passo para reproduzir o trabalho." |
