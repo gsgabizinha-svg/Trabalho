@@ -43,9 +43,13 @@ Hoje essa análise depende de regras fixas e de revisão manual, que são lentas
 e estima a **chance de um novo solicitante atrasar o pagamento**, ajudando a padronizar e acelerar a triagem.
 
 **Objetivo:** classificar solicitantes de cartão de crédito como **bons** ou **maus pagadores** a partir dos dados do cadastro (renda, ocupação, estado civil, histórico de trabalho etc.).
+Em termos práticos, a pergunta que respondemos é: **as informações do cadastro permitem identificar clientes com maior chance de atrasar o pagamento?**
 
-> **Resultado em uma frase:** com os dados cadastrais disponíveis, os modelos separam bons e maus pagadores **só um pouco melhor que um sorteio**
-> (nota 0,53 a 0,55, onde 0,50 é o acaso). Por isso o modelo serve como **apoio à análise**, não como decisor automático.
+> **O que a base permite (e não permite) responder.** Os dados reúnem o cadastro e o histórico de pagamento de clientes que **já receberam** cartão. Eles **não informam se cada pedido foi aprovado ou recusado**.
+> Por isso, o modelo estima o **risco de atraso entre quem tem histórico de crédito**; ele não reproduz a decisão original de aprovação. O enunciado fala em "prever a aprovação": aqui interpretamos como *apoiar a decisão de crédito estimando o risco de atraso*.
+
+> **Resultado em uma frase:** com os dados cadastrais disponíveis, os modelos **não separam bons e maus pagadores com confiança** (nota 0,53 a 0,55, onde 0,50 é o acaso, e o intervalo de confiança inclui o acaso).
+> Há diferenças pequenas entre grupos (idade, imóvel próprio), mas combinar características também não ajudou. O modelo serve, no máximo, como **apoio à análise**, não como decisor automático.
 
 ### Variável alvo
 
@@ -64,6 +68,9 @@ A base não traz uma coluna "bom/mau". Nós a **construímos** a partir do hist�
 
 Com limiares mais severos sobram poucos casos de mau pagador, o que torna o aprendizado instável. Com 30 dias há exemplos suficientes.
 A base é **desbalanceada**: ≈ 88% bons e ≈ 12% maus (para cada mau pagador há ~7,5 bons).
+
+> **Limitação do alvo (viés de exposição).** Basta **um** mês de atraso em qualquer época do histórico para o cliente ser "mau". Como os históricos vão de 1 a 61 meses, quem foi observado por mais tempo teve **mais chances de atrasar**:
+> a taxa de maus é de 4,0% para quem tem até 6 meses de histórico e 16,4% para quem tem mais de 3 anos. Não é erro do critério, mas precisa ser reconhecido. Testamos o efeito refazendo o alvo com a **mesma janela para todos** (ver seção 5): as conclusões se mantêm.
 
 > Usamos como preditoras apenas informações do **cadastro**. Informações tiradas do histórico de pagamento (como o tempo de conta) foram deixadas de fora:
 > elas só existem depois da concessão do crédito e fariam o modelo "colar" a resposta.
@@ -145,14 +152,14 @@ Depois execute os notebooks nesta ordem:
 
 | # | Notebook | O que faz |
 |---|---|---|
-| 1 | `notebooks/01_eda.ipynb` | Análise exploratória: nulos, alvo, distribuições, outliers, correlações e testes estatísticos |
+| 1 | `notebooks/01_eda.ipynb` | Análise exploratória: nulos, alvo, duração do histórico, outliers, correlações, testes estatísticos e **todos os cruzamentos de variáveis** |
 | 2 | `notebooks/02_preprocessamento.ipynb` | Limpeza, nulos, outliers, normalização e feature engineering |
 | 3 | `notebooks/03_modelagem.ipynb` | Treino e comparação de 5 modelos com validação cruzada |
-| 4 | `notebooks/04_avaliacao.ipynb` | Métricas, importância das variáveis, custo, teste de robustez e conclusões |
+| 4 | `notebooks/04_avaliacao.ipynb` | Métricas, importância das variáveis, custo (simulação), robustez (vazamento, cruzamentos em clientes novos, janela uniforme) e conclusões |
 
 **Semente fixa:** `RANDOM_STATE = 42`, declarada na primeira célula de cada notebook.
 Rodar os notebooks na ordem acima, a partir de um ambiente limpo, deve reproduzir
-exatamente os números da seção 5.
+exatamente os números da seção 5. (Os notebooks 03 e 04 levam alguns minutos: treinam vários modelos e testam as 120 combinações de variáveis.)
 
 ---
 
@@ -170,7 +177,7 @@ Precisão, recall e F1 referem-se à classe "mau pagador", no ponto de corte que
 | Gradient Boosting | 0,406 | 0,127 | 0,685 | 0,214 | 0,553 |
 
 **Modelo escolhido:** **Random Forest**, porque teve a maior nota (AUC-ROC) na validação cruzada do treino (0,532). Escolhemos assim, sem olhar o teste, para que o teste continue imparcial.
-Ressalva honesta: a nota no teste tem margem de erro de 0,496 a 0,565 (95% de confiança), e as diferenças entre os quatro algoritmos **não são estatisticamente relevantes**.
+Ressalva honesta: a nota no teste tem margem de erro de 0,496 a 0,565 (95% de confiança). Como o intervalo inclui 0,50, **a evidência de que o modelo supera o acaso é insuficiente** (isso não prova que seja igual ao acaso). As diferenças entre os quatro algoritmos **não são estatisticamente relevantes**.
 
 **Métricas priorizadas:** AUC-ROC, PR-AUC e o recall dos maus pagadores. Como só ~12% dos clientes são maus, a acurácia engana: um "modelo" que aprova todos acerta 88% sem detectar um único mau pagador.
 No negócio, aprovar um mau pagador (falso negativo) tende a custar mais do que recusar um bom cliente (falso positivo); por isso o recall dos maus importa, mas olhamos também o quanto de bons clientes seria recusado.
@@ -205,41 +212,94 @@ Se a divisão fosse aleatória, o modelo veria no treino "gêmeos" dos clientes 
 
 Atrasos mais graves ficam um pouco mais "previsíveis", mas com pouquíssimos casos (resultado instável).
 
+### Teste de robustez: janela de observação uniforme (viés de exposição)
+
+Para neutralizar o efeito do tempo de histórico, refizemos o alvo como "atraso de 30 dias ou mais **nos primeiros N meses**", usando só clientes com pelo menos N meses de histórico. AUC médio de 5 divisões por perfil:
+
+| Definição do alvo | Clientes | % maus | Reg. Logística | Random Forest | Gradient Boosting |
+|---|---|---|---|---|---|
+| Histórico inteiro (adotado) | 36.457 | 11,8% | 0,525 | 0,527 | 0,532 |
+| Primeiros 6 meses | 31.791 | 6,3% | 0,522 | 0,534 | 0,536 |
+| Primeiros 12 meses | 24.566 | 11,2% | 0,541 | 0,537 | 0,530 |
+| Primeiros 24 meses | 13.828 | 13,6% | 0,520 | 0,517 | 0,512 |
+
+O desempenho **não muda** (0,51 a 0,54), e as diferenças entre grupos permanecem (ex.: até 30 anos 13,6% × 60+ 10,1%; sem imóvel 12,3% × com imóvel 10,6%).
+Um dado revelador: só o **tempo de histórico** (que não existe na hora da decisão) já teria AUC 0,60, mais do que qualquer modelo com dados cadastrais.
+
+### Quão confiáveis são as diferenças entre grupos?
+
+Os 36.457 clientes formam 9.728 perfis únicos (9.727 depois do tratamento de outliers), e clientes do mesmo perfil costumam ter o mesmo resultado (correlação interna de 0,37). Na prática, os 36 mil clientes valem cerca de **18 mil independentes**.
+Corrigindo os testes estatísticos por isso (e pelo fato de testarmos muitas coisas ao mesmo tempo):
+
+- Das 16 variáveis analisadas, **13 pareciam relevantes** sem correção; **só 5 continuam**: imóvel próprio, gênero, e-mail informado, idade e tempo de emprego. Escolaridade, estado civil, moradia, ocupação, renda e carro **só pareciam** diferentes.
+- Mesmo as 5 que restam têm efeito minúsculo (V de Cramér < 0,05).
+
+### Cruzamentos de variáveis (todas as 120 combinações de duas variáveis)
+
+Cruzamos **todas as combinações de 2 entre as 16 variáveis** (idade, tempo de emprego, renda, filhos, família, gênero, carro, imóvel, telefones, e-mail, tipo de renda, escolaridade, estado civil, moradia e ocupação), mostrando sempre o tamanho de cada grupo.
+
+| Pergunta | Resultado |
+|---|---|
+| Quantos grupos de clientes os cruzamentos formam? | 1.871 (1.497 com ao menos 150 clientes) |
+| Quantos **parecem** de alto ou baixo risco (taxa ≥ 15% ou ≤ 8%)? | 138 |
+| Quantos seriam "significativos" tratando os clientes como independentes? | 248 |
+| Quantos **continuam** após corrigir por perfis repetidos e múltiplos testes? | **6** |
+| Quantos cruzamentos têm interação confirmada (o efeito de uma variável muda conforme a outra)? | 55 sem a correção, **0** com a correção |
+| As combinações escolhidas no treino melhoram a previsão em clientes novos? | **Não** (ganho médio −0,009 de AUC no teste; correlação treino × teste = −0,16) |
+| Adicionar 10 combinações a um modelo com todos os efeitos isolados | Piora (0,547 → 0,523 de AUC no teste) |
+
+Os 6 grupos que se destacam repetem, em sua maioria, o que as variáveis isoladas já indicavam (ex.: até 30 anos sem carro: 15,7%, 2.773 clientes; sem imóvel com família de 4+ pessoas: 17,5%, 1.185 clientes; sem imóvel com 2+ filhos: 16,9%, 1.246 clientes).
+Os dois restantes são grupos pequenos (381 e 484 clientes) com margem de erro grande. **São pistas para investigação, não regras de aprovação ou recusa.**
+Cruzamentos detalhados no notebook 01: Idade × Imóvel, Renda × Ocupação, Escolaridade × Tempo de emprego e Estado civil × Moradia.
+
 ---
 
 ## 6. Principais conclusões
 
 ### Em uma frase
-Com os dados do cadastro, **não conseguimos prever com confiança quem será mau pagador**: o melhor modelo ordena os clientes só um pouco melhor que um sorteio.
+Com os dados do cadastro, **não conseguimos identificar com confiança quais clientes vão atrasar**: encontramos diferenças pequenas entre perfis, mas nenhum modelo, e nenhuma combinação de características, separou bons e maus pagadores de forma convincente.
+
+### O que este estudo mostra (e o que não mostra)
+
+- A base reúne clientes que **já receberam crédito** e **não diz se cada pedido foi aprovado ou recusado**. Estimamos o **risco de atraso** entre quem tem histórico, e não a decisão original do banco.
+- "Mau pagador" = pelo menos um mês com 30 dias ou mais de atraso (11,8% dos clientes). Como os históricos têm durações diferentes, testamos uma janela igual para todos e **as conclusões se mantiveram**.
 
 ### O que os resultados significam na prática
 
-1. **O modelo não deve decidir sozinho.** Para detectar cerca de 2 em cada 3 maus pagadores, ele recusaria cerca de 2 em cada 3 bons clientes. Entre os recusados, só ~12% seriam realmente maus, praticamente a taxa geral.
-2. **Pode ajudar a priorizar a análise.** Os 20% de clientes com maior risco previsto têm cerca de **15% de maus pagadores**, contra 11,8% da média. Há algum sinal, mas fraco: serve para **organizar a fila de análise**, não para aprovar ou recusar automaticamente.
-3. **Olhando só pelo custo, ainda não compensa automatizar.** Se aprovar um mau pagador custar até 5 vezes mais do que recusar um bom, é mais barato aprovar todos do que usar o modelo. Só perto de 8 vezes o ganho aparece, e é mínimo.
-4. **Nenhuma característica isolada define o risco.** O atraso depende mais do **comportamento de pagamento** do que do perfil de cadastro.
-5. **Cuidado com resultados "bons demais".** Quem testar com perfis repetidos obtém nota 0,76, mas ela é ilusória (é como dar a prova com as respostas).
+1. **Diferenças pequenas entre perfis.** Clientes mais jovens atrasam mais (13,4% até 30 anos, 10,6% acima de 60). Quem tem imóvel atrasa menos (11,1% × 13,1%). Gênero mostra pequena diferença (12,7% homens, 11,3% mulheres), que **não deve virar critério de crédito** sem análise de justiça e adequação.
+2. **A renda não organiza o risco.** Ganhar mais não significou atrasar menos (em algumas ocupações, como tecnologia, a taxa até sobe com a renda).
+3. **Várias diferenças "sumiram" ao sermos mais rigorosos.** Escolaridade, estado civil, moradia, ocupação e carro pareciam relevantes, mas, considerando que clientes de mesmo perfil não são independentes e que testamos muitas coisas ao mesmo tempo, **não há evidência suficiente** de que sejam diferenças reais.
+4. **Combinar características não ajuda.** Das 120 combinações de duas variáveis, só 6 grupos se destacaram após a correção, nenhuma interação foi confirmada e, em clientes novos, as combinações **não melhoraram a previsão**.
+5. **Os modelos ficam perto do acaso.** Nota de 0,53 a 0,55 (0,50 é um sorteio). O Random Forest foi escolhido pela validação, mas não é comprovadamente melhor, e o intervalo de confiança inclui o acaso.
+6. **Acertar mais maus pagadores custa recusar muitos bons.** Para detectar ~2 em cada 3 maus, o modelo recusaria ~2 em cada 3 bons; entre os recusados, só ~12% seriam realmente maus (quase a taxa geral).
+7. **Cuidado com resultados "bons demais".** Com divisão aleatória o modelo parece chegar a 0,76, mas é ilusório (perfis repetidos entre treino e teste).
+
+### Como usar na prática
+
+- **Não** como único responsável pela aprovação ou recusa.
+- Como **apoio à triagem**: os 20% de clientes com maior risco previsto têm cerca de 15% de maus, contra 11,8% da média. Isso ajuda a priorizar a análise humana.
+- A análise de custo é uma **simulação com custos hipotéticos**: para as razões simuladas (até 5 vezes), aprovar todos custa menos do que usar o modelo. Com os custos reais da instituição a conta deve ser refeita.
 
 ### O que mais pesa na previsão (e o que cada variável significa)
 
 | Variável | O que representa | O que observamos |
 |---|---|---|
-| **Idade** (a mais importante) | Idade do solicitante | Mais jovem, um pouco mais de risco: 13,4% de maus entre 20 e 30 anos, contra 10,6% entre 60 e 70 |
+| **Idade** (a mais importante) | Idade do solicitante | Mais jovem, um pouco mais de atraso: 13,4% de maus até 30 anos, contra 10,6% acima de 60 |
 | **Imóvel próprio** | Possui casa/apartamento | Quem tem: 11,1% de maus. Quem não tem: 13,1% |
-| **Carro próprio** | Possui carro | Mesma direção, efeito menor (11,3% × 12,0%) |
+| **Carro próprio** | Possui carro | Mesma direção, efeito menor e pouco confiável (11,3% × 12,0%) |
 | **Tempo de emprego** | Anos no emprego atual | Efeito pequeno e sem padrão simples |
-| **Gênero** | Masculino/feminino | Pequena diferença (12,7% de maus entre homens, 11,3% entre mulheres). **Atenção ética e regulatória** |
-| **Renda** | Renda anual | **Quase nenhum efeito**: ganhar mais não significou pagar melhor nesta base |
+| **Gênero** | Masculino/feminino | Pequena diferença (12,7% × 11,3%). **Atenção ética e regulatória** |
+| **Renda** | Renda anual | **Sem relação clara**: ganhar mais não significou pagar melhor nesta base |
 
-Todas essas diferenças são **pequenas** (1 a 3 pontos percentuais). Elas existem estatisticamente, mas, sozinhas, não bastam para identificar um mau pagador.
+Todas essas diferenças são **associações** de 1 a 3 pontos percentuais, e não causas: ter imóvel não "faz" ninguém pagar em dia; pode refletir idade, estabilidade ou outras características.
 
 ### Limitações e próximos passos
 
-- **Falta informação:** incluir histórico em bureaus de crédito, movimentação financeira e relacionamento com o banco é o caminho mais promissor.
-- **O rótulo foi construído por nós** (atraso ≥ 30 dias) e deve ser alinhado à política de risco real da instituição.
-- **Só há resposta para quem já recebeu crédito** (viés de seleção): o modelo não conhece o comportamento de quem foi recusado.
-- **Custos reais** de aprovar um mau pagador e de recusar um bom devem substituir as razões de exemplo usadas na análise de custo.
-- **Ética e regulação:** avaliar o uso de gênero e idade, calibrar as probabilidades, validar em outro período e monitorar o modelo antes de qualquer uso em produção.
+- **Falta informação:** histórico em bureaus de crédito, movimentação financeira e relacionamento com o banco são os dados mais promissores.
+- **Alvo e janela:** definir com a área de risco o critério de "mau pagador" e um período de observação igual para todos.
+- **Viés de seleção:** só observamos quem foi aprovado; não sabemos como se comportariam os recusados.
+- **Custos reais** de aprovar um mau pagador e de recusar um bom devem substituir as razões de exemplo.
+- **Ética e regulação:** avaliar o uso de gênero e idade, validar em outro período e monitorar o modelo antes de qualquer uso em produção.
 
 ---
 
