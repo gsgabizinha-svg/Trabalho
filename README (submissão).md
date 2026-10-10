@@ -42,12 +42,9 @@ Estes três links são **obrigatórios** e devem ser idênticos aos do PDF de su
 
 ## 3. O problema
 
-Conceder crédito é uma das atividades centrais de um banco, mas traz um risco: o cliente que **não paga**. Aprovar um mau pagador costuma custar muito mais do que recusar um bom cliente.
-Hoje essa análise depende de regras fixas e de revisão manual, que são lentas e pouco padronizadas. Com Machine Learning, o computador aprende com o histórico de milhares de clientes
-e estima a **chance de um novo solicitante atrasar o pagamento**, ajudando a padronizar e acelerar a triagem.
+A concessão de crédito é uma das atividades centrais de instituições financeiras, mas envolve riscos significativos, especialmente quando clientes não honram seus compromissos. Aprovar um mau pagador pode gerar custos elevados, enquanto recusar um bom cliente também representa perda de oportunidade. Tradicionalmente, essa análise depende de regras fixas e revisões manuais, processos que tendem a ser lentos e pouco padronizados. Com o uso de técnicas de machine learning, é possível treinar modelos a partir do histórico de milhares de clientes para estimar a probabilidade de inadimplência em novos solicitantes.
 
-**Objetivo:** classificar solicitantes de cartão de crédito como **bons** ou **maus pagadores** a partir dos dados do cadastro (renda, ocupação, estado civil, histórico de trabalho etc.).
-Em termos práticos, a pergunta que respondemos é: **as informações do cadastro permitem identificar clientes com maior chance de atrasar o pagamento?**
+**Objetivo:** desenvolver um modelo de aprendizado de máquina voltado para a predição da aprovação de pedidos de cartão de crédito. A partir de atributos cadastrais como renda, ocupação, estado civil e histórico de trabalho, o modelo busca identificar padrões que permitam classificar os clientes como potenciais "bons" ou "maus" pagadores, oferecendo às instituições financeiras um suporte mais preciso e eficiente na tomada de decisão quanto à concessão de crédito.
 
 ### Variável alvo
 
