@@ -1,6 +1,6 @@
 # Tech Challenge — Fase 2 | POSTECH Data Analytics
 
-> **INSTRUÇÕES:** este README é um template. Substitua **todos** os blocos marcados com
+> REMOVER AO FINAL ESSA PARTE **INSTRUÇÕES:** este README é um template. Substitua **todos** os blocos marcados com
 > `<!-- PREENCHER -->` e apague as linhas de instrução antes de submeter.
 
 ---
