@@ -1,146 +1,114 @@
-# Tech Challenge — Fase 2 | POSTECH Data Analytics
+# Tech Challenge – Fase 2 · Predição de Aprovação de Cartão de Crédito
 
-> **INSTRUÇÕES:** este README é um template. Substitua **todos** os blocos marcados com
-> `<!-- PREENCHER -->` e apague as linhas de instrução antes de submeter.
+**POSTECH – FIAP** · Classificação supervisionada de **bons** e **maus** pagadores a partir de dados cadastrais.
 
----
+> **Resumo executivo (leia primeiro).** Construímos um pipeline completo (limpeza → EDA → 5 modelos → avaliação → interpretação).
+> Com validação rigorosa (sem vazamento), os dados cadastrais discriminam **pouco** os maus pagadores:
+> o melhor modelo atinge **ROC-AUC ≈ 0,53–0,55** (baseline = 0,50). Mostramos que o ROC-AUC de **~0,76** obtido com um split aleatório é
+> **ilusório**, causado por perfis duplicados entre treino e teste. A recomendação é usar o modelo apenas como **triagem complementar**
+> e enriquecer a base com dados comportamentais.
 
-## 1. Identificação
+## 1. Problema de negócio
+Instituições financeiras precisam decidir se concedem cartão de crédito, equilibrando **crescimento** (aprovar bons clientes) e **risco de inadimplência**
+(aprovar maus pagadores). Objetivo: apoiar a decisão com um modelo que, a partir de renda, ocupação, estado civil, histórico de trabalho etc.,
+estime a probabilidade de o solicitante ser mau pagador.
 
-| Campo | Valor |
-|---|---|
-| Turma | <!-- PREENCHER: ex. 12DTAT --> |
-| Grupo | <!-- PREENCHER: ex. Grupo 07 --> |
-| Data de entrega | <!-- PREENCHER: DD/MM/AAAA --> |
-
-### Integrantes
-
-| Nome completo | RM | E-mail |
+## 2. Dados
+| Arquivo | Conteúdo | Tamanho |
 |---|---|---|
-| <!-- PREENCHER --> | RM000000 | |
-| | | |
-| | | |
-| | | |
-| | | |
+| `application_record.csv` | Cadastro (18 colunas) | 438.557 linhas · 438.510 IDs únicos |
+| `credit_record.csv` | Histórico mensal de pagamento (`STATUS`) | 1.048.575 linhas · 45.985 IDs |
 
----
+Apenas **36.457 clientes** existem nas duas tabelas – são a base de modelagem. Coloque os CSVs em `data/raw/` (não versionados, ver `.gitignore`).
 
-## 2. Links da entrega
+**Variável-alvo (construída).** `STATUS`: 0 = 1-29 dias de atraso, 1 = 30-59, 2 = 60-89, 3 = 90-119, 4 = 120-149, 5 = 150+; C = quitado; X = sem empréstimo.
+**Mau pagador = algum mês com atraso ≥ 30 dias** → **11,77%** de maus (desbalanceado). É um parâmetro (`BAD_STATUS_THRESHOLD` em `src/config.py`).
+> Usamos apenas variáveis do **cadastro** como preditoras. Variáveis derivadas do `credit_record` (ex.: tempo de conta) foram evitadas porque
+> não existem no momento da decisão e geram vazamento temporal.
 
-Estes três links são **obrigatórios** e devem ser idênticos aos do PDF de submissão.
+## 3. Pipeline
+```
+data_prep.py → eda.py → train.py → diagnostics.py
+   │              │          │            └─ vazamento + sensibilidade do alvo
+   │              │          └─ split agrupado, CV, 5 modelos, threshold, importância, bootstrap
+   │              └─ figuras + testes estatísticos
+   └─ alvo, limpeza, feature engineering
+```
+**Limpeza / features:** remoção de IDs duplicados; `DAYS_*` → anos; sentinela `365243` → flag aposentado/desempregado; ocupação nula → "Nao informado";
+log da renda; renda por membro; *clip* de outliers (filhos, tamanho da família); remoção de coluna constante (`FLAG_MOBIL`).
 
-| Item | Link |
-|---|---|
-| Repositório | <!-- PREENCHER: URL pública do GitHub --> |
-| Vídeo executivo (≤ 5 min) | <!-- PREENCHER: YouTube não listado / Drive com acesso liberado --> |
-| Apresentação | <!-- PREENCHER: link do arquivo em `docs/` ou Drive --> |
+**Decisões metodológicas que protegem a validade dos resultados**
+1. **Split agrupado por perfil.** 73% das linhas têm cadastro idêntico ao de outra pessoa (só 9.727 perfis únicos em 36.457 clientes).
+   Um split aleatório coloca "gêmeos" em treino e teste. Usamos `StratifiedGroupKFold` para que nenhum perfil apareça nos dois lados.
+2. **Pré-processamento dentro do `Pipeline`** (sem vazar estatísticas do teste).
+3. **Campeão escolhido por CV no treino**, não pelo teste. O corte de decisão também é definido apenas no treino (predições *out-of-fold*).
+4. **Intervalo de confiança** do ROC-AUC por bootstrap de perfis.
 
-> ⚠️ Repositório privado ou inacessível inviabiliza a avaliação da entrega.
-> Confira o acesso em uma janela anônima antes de enviar.
+## 4. Resultados (conjunto de teste: 7.291 clientes, 11,77% maus)
+| Modelo | CV ROC-AUC (treino) | ROC-AUC | PR-AUC | KS | Recall (mau) | Precisão (mau) |
+|---|---|---|---|---|---|---|
+| Baseline (Dummy) | 0,500 | 0,500 | 0,118 | 0,000 | 0,00 | 0,00 |
+| Regressão Logística | 0,530 | 0,541 | 0,137 | 0,091 | 0,53 | 0,13 |
+| Árvore de Decisão | 0,508 | 0,548 | 0,134 | 0,095 | 0,54 | 0,14 |
+| **Random Forest (campeão por CV)** | **0,532** | 0,530 | 0,136 | 0,072 | 0,67 | 0,12 |
+| Gradient Boosting (HistGB) | 0,523 | 0,553 | 0,141 | 0,101 | 0,69 | 0,13 |
 
----
+- **IC 95% do ROC-AUC do campeão:** [0,496 ; 0,565] – inclui 0,50. As diferenças entre algoritmos **não são estatisticamente distinguíveis**.
+- Métricas escolhidas: ROC-AUC, PR-AUC e KS (robustas ao desbalanceamento), recall/precisão da classe "mau". **Acurácia foi evitada** (um modelo que aprova todos teria 88%).
+- **Decis de risco:** os decis 9-10 têm ~15% de maus vs. 11,8% médio (lift ≈ 1,27). O ordenamento é fraco e não monotônico.
+- **Variáveis mais relevantes (permutação):** `AGE_YEARS`, `FLAG_OWN_REALTY`, `FLAG_OWN_CAR`, `YEARS_EMPLOYED`, `IS_MALE`. Renda tem importância ≈ 0.
+- **Teste estatístico:** várias variáveis são significativas (p < 0,05), mas com V de Cramér < 0,05 (efeitos minúsculos).
 
-## 3. O problema
+### Diagnóstico de vazamento (resultado-chave)
+| Cenário | ROC-AUC | PR-AUC | % do teste com perfil visto no treino |
+|---|---|---|---|
+| Split **aleatório** (errado) | 0,760 | 0,371 | 89,4% |
+| Split **agrupado** (correto) | 0,505 | 0,122 | 0,0% |
 
-<!-- PREENCHER: contexto de negócio e a motivação para o uso de Machine Learning. -->
-
-### Variável alvo
-
-<!-- PREENCHER: qual é a variável alvo, como foi definida e — se houve binarização —
-     qual limiar foi adotado e por quê. Justifique com base na distribuição das classes. -->
-
-### Dataset
-
-| Campo | Valor |
-|---|---|
-| Fonte | <!-- PREENCHER: URL --> |
-| Linhas × colunas | <!-- PREENCHER --> |
-| Período / versão | <!-- PREENCHER --> |
-| Licença de uso | <!-- PREENCHER --> |
-
-Descrição das variáveis:
-
-| Variável | Tipo | Descrição |
+### Sensibilidade à definição de "mau"
+| Definição | % maus | ROC-AUC |
 |---|---|---|
-| | | |
+| ≥ 30 dias | 11,8% | 0,505 |
+| ≥ 60 dias | 1,7% | 0,563 |
+| ≥ 90 dias | 0,8% | 0,625 |
+Atrasos mais graves são ligeiramente mais previsíveis, porém com pouquíssimos casos (instável).
 
----
+### Análise de custo (`reports/sensibilidade_custo.csv`)
+Para custo de aprovar um mau (FN) até **5×** o de recusar um bom (FP), "aprovar todos" custa menos que usar o modelo; só aparece ganho marginal (~1%) com razão ≈ 8:1.
+Ou seja: **com estes dados, o modelo ainda não justifica automação da decisão.**
 
-## 4. Como reproduzir
+## 5. Conclusões e recomendações
+1. Entregamos um pipeline reprodutível e validado corretamente; o baixo desempenho reflete **o limite informacional do cadastro**, não falha de modelagem.
+2. Usar como **score de triagem complementar** (ex.: priorizar análise manual dos decis de maior risco), nunca como decisor único.
+3. **Enriquecer a base:** histórico de bureau, comportamento transacional, relacionamento prévio com o banco.
+4. **Governança:** `IS_MALE` e `AGE_YEARS` entram no modelo – avaliar impacto regulatório/ético (discriminação) antes de produção; definir custos reais FN/FP; monitorar *drift*.
 
+## 6. Como reproduzir
 ```bash
-git clone <URL_DO_REPOSITORIO>
-cd <NOME_DO_REPOSITORIO>
-
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-
 pip install -r requirements.txt
-jupyter notebook
+# coloque application_record.csv e credit_record.csv em data/raw/
+python -m src.data_prep      # gera data/processed/dataset_model.csv
+python -m src.eda            # figuras + testes estatísticos em reports/
+python -m src.train          # treina, avalia, salva models/modelo_campeao.joblib e reports/*
+python -m src.diagnostics    # vazamento e sensibilidade do alvo
+```
+Notebook narrado e já executado: `notebooks/tech_challenge_fase2.ipynb`.
+
+**Usar o modelo salvo**
+```python
+import joblib, pandas as pd
+m = joblib.load("models/modelo_campeao.joblib")
+score = m["pipeline"].predict_proba(novos_clientes[m["features"]])[:, 1]   # prob. de mau pagador
+recusar = score >= m["threshold"]
 ```
 
-Baixe o dataset e coloque o arquivo bruto em `data/raw/` (os dados **não** são versionados —
-veja `data/README.md`).
-
-Depois execute os notebooks nesta ordem:
-
-| # | Notebook | O que faz |
-|---|---|---|
-| 1 | `notebooks/01_eda.ipynb` | Análise exploratória |
-| 2 | `notebooks/02_preprocessamento.ipynb` | Limpeza, escala e feature engineering |
-| 3 | `notebooks/03_modelagem.ipynb` | Treino e comparação dos modelos |
-| 4 | `notebooks/04_avaliacao.ipynb` | Métricas, importância de variáveis e conclusões |
-
-**Semente fixa:** `RANDOM_STATE = 42`, declarada na primeira célula de cada notebook.
-Rodar os notebooks na ordem acima, a partir de um ambiente limpo, deve reproduzir
-exatamente os números da seção 5.
-
----
-
-## 5. Resultados
-
-| Modelo | Acurácia | Precisão | Recall | F1 | AUC-ROC |
-|---|---|---|---|---|---|
-| <!-- PREENCHER --> | | | | | |
-| | | | | | |
-
-**Modelo escolhido:** <!-- PREENCHER --> — <!-- PREENCHER: por quê. -->
-
-**Métricas priorizadas:** <!-- PREENCHER: justifique a escolha considerando o
-     desbalanceamento de classes e o custo de cada tipo de erro no contexto do negócio. -->
-
----
-
-## 6. Principais conclusões
-
-<!-- PREENCHER: 3 a 5 conclusões em linguagem de negócio.
-     Inclua quais variáveis mais influenciam o resultado e o que isso significa
-     na prática para quem vai usar o modelo. -->
-
-1.
-2.
-3.
-
-### Limitações e próximos passos
-
-<!-- PREENCHER -->
-
----
-
-## 7. Estrutura do repositório
-
+## 7. Estrutura
 ```
-.
-├── data/          dados brutos (raw) e tratados (processed) — não versionados
-├── notebooks/     análise em ordem numerada
-└── docs/          apresentação executiva
+├── data/raw/            # CSVs originais (não versionados)
+├── notebooks/           # notebook narrado
+├── src/                 # config, data_prep, eda, train, diagnostics
+├── models/              # modelo campeão (.joblib)
+├── reports/             # métricas (.csv/.json) e figuras
+└── requirements.txt
 ```
-
-Detalhes e convenções em [`ESTRUTURA.md`](ESTRUTURA.md).
-Antes de enviar, percorra o [`CHECKLIST.md`](CHECKLIST.md).
-
----
-
-## 8. Tecnologias
-
-<!-- PREENCHER: Python 3.11, pandas, scikit-learn, ... -->
+> Observação: o enunciado indica o template `drlima/postech-techchallenge-fase2-template`; se o grupo preferir, basta mover estes arquivos para a estrutura dele.
