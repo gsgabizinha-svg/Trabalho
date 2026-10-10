@@ -1,114 +1,279 @@
-# Tech Challenge – Fase 2 · Predição de Aprovação de Cartão de Crédito
+# Tech Challenge — Fase 2 | POSTECH Data Analytics
 
-**POSTECH – FIAP** · Classificação supervisionada de **bons** e **maus** pagadores a partir de dados cadastrais.
+**Predição de aprovação de pedidos de cartão de crédito com Aprendizado de Máquina**
 
-> **Resumo executivo (leia primeiro).** Construímos um pipeline completo (limpeza → EDA → 5 modelos → avaliação → interpretação).
-> Com validação rigorosa (sem vazamento), os dados cadastrais discriminam **pouco** os maus pagadores:
-> o melhor modelo atinge **ROC-AUC ≈ 0,53–0,55** (baseline = 0,50). Mostramos que o ROC-AUC de **~0,76** obtido com um split aleatório é
-> **ilusório**, causado por perfis duplicados entre treino e teste. A recomendação é usar o modelo apenas como **triagem complementar**
-> e enriquecer a base com dados comportamentais.
+---
 
-## 1. Problema de negócio
-Instituições financeiras precisam decidir se concedem cartão de crédito, equilibrando **crescimento** (aprovar bons clientes) e **risco de inadimplência**
-(aprovar maus pagadores). Objetivo: apoiar a decisão com um modelo que, a partir de renda, ocupação, estado civil, histórico de trabalho etc.,
-estime a probabilidade de o solicitante ser mau pagador.
+## 1. Identificação
 
-## 2. Dados
-| Arquivo | Conteúdo | Tamanho |
+| Campo | Valor |
+|---|---|
+| Turma | 2º ano – 2DTATBB – 4ª Entrada |
+| Grupo | Grupo 01 |
+| Data de entrega | 10/10/2026 |
+
+### Integrantes
+
+| Nome completo | RM | E-mail |
 |---|---|---|
-| `application_record.csv` | Cadastro (18 colunas) | 438.557 linhas · 438.510 IDs únicos |
-| `credit_record.csv` | Histórico mensal de pagamento (`STATUS`) | 1.048.575 linhas · 45.985 IDs |
+| Angelica Fonseca de Freitas | RM377836 | angelicafonsecabb@gmail.com |
+| Fernanda de Oliveira Almeida | RM377812 | fernandaalmeida84@yahoo.com.br |
+| Gabriela Souza e Silva | RM377814 | gsgabizinha@gmail.com |
+| Juliana Oliveira Couto Espindola Vaz de Lima | RM377805 | juoliveiracouto@gmail.com |
+| William Vladimir Rosales Merida da Silva | RM377758 | wvmerida@gmail.com |
 
-Apenas **36.457 clientes** existem nas duas tabelas – são a base de modelagem. Coloque os CSVs em `data/raw/` (não versionados, ver `.gitignore`).
+---
 
-**Variável-alvo (construída).** `STATUS`: 0 = 1-29 dias de atraso, 1 = 30-59, 2 = 60-89, 3 = 90-119, 4 = 120-149, 5 = 150+; C = quitado; X = sem empréstimo.
-**Mau pagador = algum mês com atraso ≥ 30 dias** → **11,77%** de maus (desbalanceado). É um parâmetro (`BAD_STATUS_THRESHOLD` em `src/config.py`).
-> Usamos apenas variáveis do **cadastro** como preditoras. Variáveis derivadas do `credit_record` (ex.: tempo de conta) foram evitadas porque
-> não existem no momento da decisão e geram vazamento temporal.
+## 2. Links da entrega
 
-## 3. Pipeline
-```
-data_prep.py → eda.py → train.py → diagnostics.py
-   │              │          │            └─ vazamento + sensibilidade do alvo
-   │              │          └─ split agrupado, CV, 5 modelos, threshold, importância, bootstrap
-   │              └─ figuras + testes estatísticos
-   └─ alvo, limpeza, feature engineering
-```
-**Limpeza / features:** remoção de IDs duplicados; `DAYS_*` → anos; sentinela `365243` → flag aposentado/desempregado; ocupação nula → "Nao informado";
-log da renda; renda por membro; *clip* de outliers (filhos, tamanho da família); remoção de coluna constante (`FLAG_MOBIL`).
+Estes três links são **obrigatórios** e devem ser idênticos aos do PDF de submissão.
 
-**Decisões metodológicas que protegem a validade dos resultados**
-1. **Split agrupado por perfil.** 73% das linhas têm cadastro idêntico ao de outra pessoa (só 9.727 perfis únicos em 36.457 clientes).
-   Um split aleatório coloca "gêmeos" em treino e teste. Usamos `StratifiedGroupKFold` para que nenhum perfil apareça nos dois lados.
-2. **Pré-processamento dentro do `Pipeline`** (sem vazar estatísticas do teste).
-3. **Campeão escolhido por CV no treino**, não pelo teste. O corte de decisão também é definido apenas no treino (predições *out-of-fold*).
-4. **Intervalo de confiança** do ROC-AUC por bootstrap de perfis.
+| Item | Link |
+|---|---|
+| Repositório | _[inserir URL pública do GitHub]_ |
+| Vídeo executivo (≤ 5 min) | _[inserir link do YouTube não listado / Drive com acesso liberado]_ |
+| Apresentação | _[inserir link do arquivo `docs/apresentacao_executiva.pdf` no GitHub ou no Drive]_ |
 
-## 4. Resultados (conjunto de teste: 7.291 clientes, 11,77% maus)
-| Modelo | CV ROC-AUC (treino) | ROC-AUC | PR-AUC | KS | Recall (mau) | Precisão (mau) |
-|---|---|---|---|---|---|---|
-| Baseline (Dummy) | 0,500 | 0,500 | 0,118 | 0,000 | 0,00 | 0,00 |
-| Regressão Logística | 0,530 | 0,541 | 0,137 | 0,091 | 0,53 | 0,13 |
-| Árvore de Decisão | 0,508 | 0,548 | 0,134 | 0,095 | 0,54 | 0,14 |
-| **Random Forest (campeão por CV)** | **0,532** | 0,530 | 0,136 | 0,072 | 0,67 | 0,12 |
-| Gradient Boosting (HistGB) | 0,523 | 0,553 | 0,141 | 0,101 | 0,69 | 0,13 |
+---
 
-- **IC 95% do ROC-AUC do campeão:** [0,496 ; 0,565] – inclui 0,50. As diferenças entre algoritmos **não são estatisticamente distinguíveis**.
-- Métricas escolhidas: ROC-AUC, PR-AUC e KS (robustas ao desbalanceamento), recall/precisão da classe "mau". **Acurácia foi evitada** (um modelo que aprova todos teria 88%).
-- **Decis de risco:** os decis 9-10 têm ~15% de maus vs. 11,8% médio (lift ≈ 1,27). O ordenamento é fraco e não monotônico.
-- **Variáveis mais relevantes (permutação):** `AGE_YEARS`, `FLAG_OWN_REALTY`, `FLAG_OWN_CAR`, `YEARS_EMPLOYED`, `IS_MALE`. Renda tem importância ≈ 0.
-- **Teste estatístico:** várias variáveis são significativas (p < 0,05), mas com V de Cramér < 0,05 (efeitos minúsculos).
+## 3. O problema
 
-### Diagnóstico de vazamento (resultado-chave)
-| Cenário | ROC-AUC | PR-AUC | % do teste com perfil visto no treino |
-|---|---|---|---|
-| Split **aleatório** (errado) | 0,760 | 0,371 | 89,4% |
-| Split **agrupado** (correto) | 0,505 | 0,122 | 0,0% |
+Conceder crédito é uma das atividades centrais de um banco, mas traz um risco: o cliente que **não paga**. Aprovar um mau pagador costuma custar muito mais do que recusar um bom cliente.
+Hoje essa análise depende de regras fixas e de revisão manual, que são lentas e pouco padronizadas. Com Machine Learning, o computador aprende com o histórico de milhares de clientes
+e estima a **chance de um novo solicitante atrasar o pagamento**, ajudando a padronizar e acelerar a triagem.
 
-### Sensibilidade à definição de "mau"
-| Definição | % maus | ROC-AUC |
+**Objetivo:** classificar solicitantes de cartão de crédito como **bons** ou **maus pagadores** a partir dos dados do cadastro (renda, ocupação, estado civil, histórico de trabalho etc.).
+
+> **Resultado em uma frase:** com os dados cadastrais disponíveis, os modelos separam bons e maus pagadores **só um pouco melhor que um sorteio**
+> (nota 0,53 a 0,55, onde 0,50 é o acaso). Por isso o modelo serve como **apoio à análise**, não como decisor automático.
+
+### Variável alvo
+
+A base não traz uma coluna "bom/mau". Nós a **construímos** a partir do histórico mensal de pagamento (`credit_record.STATUS`):
+`0` = atraso de 1–29 dias, `1` = 30–59, `2` = 60–89, `3` = 90–119, `4` = 120–149, `5` = 150+ dias; `C` = quitado no mês; `X` = sem empréstimo no mês.
+
+**Mau pagador (`TARGET = 1`) = cliente com pelo menos um mês de atraso de 30 dias ou mais.** Os demais são bons pagadores (`TARGET = 0`).
+
+**Por que 30 dias? (justificativa pela distribuição das classes)** entre os 36.457 clientes que têm cadastro e histórico:
+
+| Definição de "mau" | Maus | % |
 |---|---|---|
-| ≥ 30 dias | 11,8% | 0,505 |
+| Atraso ≥ 30 dias (**adotado**) | 4.291 | 11,77% |
+| Atraso ≥ 60 dias | 616 | 1,69% |
+| Atraso ≥ 90 dias | 302 | 0,83% |
+
+Com limiares mais severos sobram poucos casos de mau pagador, o que torna o aprendizado instável. Com 30 dias há exemplos suficientes.
+A base é **desbalanceada**: ≈ 88% bons e ≈ 12% maus (para cada mau pagador há ~7,5 bons).
+
+> Usamos como preditoras apenas informações do **cadastro**. Informações tiradas do histórico de pagamento (como o tempo de conta) foram deixadas de fora:
+> elas só existem depois da concessão do crédito e fariam o modelo "colar" a resposta.
+
+### Dataset
+
+| Campo | Valor |
+|---|---|
+| Fonte | <https://drive.google.com/file/d/1z4yEyiCE_CGCWbvAAZQZSz-5-E5T5eYd/view?usp=sharing> (indicada no enunciado do Tech Challenge) |
+| Linhas × colunas | `application_record.csv`: 438.557 × 18 (438.510 IDs únicos) · `credit_record.csv`: 1.048.575 × 3 (45.985 IDs). Base de modelagem (clientes presentes nas duas tabelas, após o tratamento): **36.457 × 22** |
+| Período / versão | Versão única do enunciado. `MONTHS_BALANCE` vai de 0 (mês de referência) a −60 (cinco anos antes); não há datas absolutas |
+| Licença de uso | Não especificada na fonte fornecida; uso estritamente acadêmico (Tech Challenge POSTECH/FIAP) |
+
+Descrição das variáveis:
+
+**`application_record.csv` (cadastro)**
+
+| Variável | Tipo | Descrição |
+|---|---|---|
+| `ID` | Identificador | Código do cliente (liga as duas tabelas) |
+| `CODE_GENDER` | Categórica | Gênero (M/F) |
+| `FLAG_OWN_CAR` | Binária | Possui carro (Y/N) |
+| `FLAG_OWN_REALTY` | Binária | Possui imóvel (Y/N) |
+| `CNT_CHILDREN` | Numérica | Número de filhos |
+| `AMT_INCOME_TOTAL` | Numérica | Renda anual |
+| `NAME_INCOME_TYPE` | Categórica | Tipo de renda (Working, Commercial associate, Pensioner, State servant, Student) |
+| `NAME_EDUCATION_TYPE` | Categórica | Escolaridade |
+| `NAME_FAMILY_STATUS` | Categórica | Estado civil |
+| `NAME_HOUSING_TYPE` | Categórica | Tipo de moradia |
+| `DAYS_BIRTH` | Numérica | Dias desde o nascimento, contados para trás (valor negativo) |
+| `DAYS_EMPLOYED` | Numérica | Dias no emprego atual (negativo); **365243** = não trabalha (aposentado/desempregado) |
+| `FLAG_MOBIL` | Binária | Possui celular (sempre 1; descartada) |
+| `FLAG_WORK_PHONE` | Binária | Possui telefone comercial |
+| `FLAG_PHONE` | Binária | Possui telefone residencial |
+| `FLAG_EMAIL` | Binária | Possui e-mail |
+| `OCCUPATION_TYPE` | Categórica | Ocupação (30,6% nulos) |
+| `CNT_FAM_MEMBERS` | Numérica | Pessoas na família |
+
+**`credit_record.csv` (histórico)**
+
+| Variável | Tipo | Descrição |
+|---|---|---|
+| `ID` | Identificador | Código do cliente |
+| `MONTHS_BALANCE` | Numérica | Mês do registro em relação ao de referência (0 = atual, −1 = mês anterior…) |
+| `STATUS` | Categórica | Situação de pagamento do mês (ver variável alvo) |
+
+**Variáveis criadas (feature engineering)**
+
+| Variável | O que é |
+|---|---|
+| `TARGET` | 1 = mau pagador, 0 = bom pagador |
+| `AGE_YEARS`, `YEARS_EMPLOYED` | Idade e tempo de emprego em anos |
+| `IS_UNEMPLOYED_OR_RETIRED` | Marca quem não trabalha (código 365243) |
+| `LOG_INCOME`, `LOG_INCOME_PER_MEMBER` | Renda e renda por pessoa da família, em escala logarítmica |
+| `IS_MALE` | Gênero em 0/1 |
+| `OCCUPATION_TYPE = "Nao informado"` | Categoria própria para ocupação em branco |
+| `PROFILE_GROUP` | Identifica perfis idênticos (usado só para separar treino e teste; **não é preditora**) |
+
+---
+
+## 4. Como reproduzir
+
+```bash
+git clone <URL_DO_REPOSITORIO>
+cd <NOME_DO_REPOSITORIO>
+
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+
+pip install -r requirements.txt
+pip install notebook             # para abrir os notebooks
+jupyter notebook
+```
+
+Baixe o dataset e coloque os arquivos brutos `application_record.csv` e `credit_record.csv` em `data/raw/` (os dados **não** são versionados —
+veja `data/README.md`).
+
+Depois execute os notebooks nesta ordem:
+
+| # | Notebook | O que faz |
+|---|---|---|
+| 1 | `notebooks/01_eda.ipynb` | Análise exploratória: nulos, alvo, distribuições, outliers, correlações e testes estatísticos |
+| 2 | `notebooks/02_preprocessamento.ipynb` | Limpeza, nulos, outliers, normalização e feature engineering |
+| 3 | `notebooks/03_modelagem.ipynb` | Treino e comparação de 5 modelos com validação cruzada |
+| 4 | `notebooks/04_avaliacao.ipynb` | Métricas, importância das variáveis, custo, teste de robustez e conclusões |
+
+**Semente fixa:** `RANDOM_STATE = 42`, declarada na primeira célula de cada notebook.
+Rodar os notebooks na ordem acima, a partir de um ambiente limpo, deve reproduzir
+exatamente os números da seção 5.
+
+---
+
+## 5. Resultados
+
+Os números abaixo vêm do **conjunto de teste**: 7.291 clientes (11,77% maus) com perfis que o modelo **nunca viu** no treino.
+Precisão, recall e F1 referem-se à classe "mau pagador", no ponto de corte que melhor separa os dois grupos (definido só com dados de treino).
+
+| Modelo | Acurácia | Precisão | Recall | F1 | AUC-ROC |
+|---|---|---|---|---|---|
+| Referência (aprova todos) | 0,882 | 0,000 | 0,000 | 0,000 | 0,500 |
+| Regressão Logística | 0,518 | 0,128 | 0,534 | 0,207 | 0,541 |
+| Árvore de Decisão | 0,551 | 0,139 | 0,541 | 0,221 | 0,548 |
+| **Random Forest** | 0,401 | 0,123 | 0,670 | 0,208 | 0,530 |
+| Gradient Boosting | 0,406 | 0,127 | 0,685 | 0,214 | 0,553 |
+
+**Modelo escolhido:** **Random Forest**, porque teve a maior nota (AUC-ROC) na validação cruzada do treino (0,532). Escolhemos assim, sem olhar o teste, para que o teste continue imparcial.
+Ressalva honesta: a nota no teste tem margem de erro de 0,496 a 0,565 (95% de confiança), e as diferenças entre os quatro algoritmos **não são estatisticamente relevantes**.
+
+**Métricas priorizadas:** AUC-ROC, PR-AUC e o recall dos maus pagadores. Como só ~12% dos clientes são maus, a acurácia engana: um "modelo" que aprova todos acerta 88% sem detectar um único mau pagador.
+No negócio, aprovar um mau pagador (falso negativo) tende a custar mais do que recusar um bom cliente (falso positivo); por isso o recall dos maus importa, mas olhamos também o quanto de bons clientes seria recusado.
+
+### Como ler essas métricas (sem jargão)
+
+| Métrica | Pergunta que responde | Resultado do modelo |
+|---|---|---|
+| **Acurácia** | De todos os clientes, quantos o modelo classificou certo? | Baixa (40–55%), pois o modelo aceita errar em bons para tentar pegar maus |
+| **Recall** | Dos maus pagadores reais, quantos o modelo pegou? | ~67 em cada 100 (Random Forest) |
+| **Precisão** | Dos clientes que o modelo recusou, quantos eram mesmo maus? | ~12 em cada 100, quase igual à taxa geral de maus (11,8%) |
+| **F1** | Equilíbrio entre precisão e recall | ~0,21 (baixo) |
+| **AUC-ROC** | O quanto o modelo ordena os clientes por risco (0,50 = sorteio, 1,00 = perfeito) | 0,53 a 0,55, perto do sorteio |
+
+### Teste de robustez: o perigo dos perfis repetidos
+
+Os 36.457 clientes formam só 9.727 perfis únicos (73% das linhas repetem um perfil já existente). Por isso, treino e teste foram separados **por perfil**.
+Se a divisão fosse aleatória, o modelo veria no treino "gêmeos" dos clientes do teste e pareceria muito melhor:
+
+| Tipo de divisão | AUC-ROC | % do teste com perfil já visto no treino |
+|---|---|---|
+| Aleatória (incorreta) | 0,760 | 89,4% |
+| Agrupada por perfil (adotada) | 0,505 | 0,0% |
+
+### Sensibilidade à definição de "mau pagador"
+
+| Definição | % maus | AUC-ROC |
+|---|---|---|
+| ≥ 30 dias (adotada) | 11,8% | 0,505 |
 | ≥ 60 dias | 1,7% | 0,563 |
 | ≥ 90 dias | 0,8% | 0,625 |
-Atrasos mais graves são ligeiramente mais previsíveis, porém com pouquíssimos casos (instável).
 
-### Análise de custo (`reports/sensibilidade_custo.csv`)
-Para custo de aprovar um mau (FN) até **5×** o de recusar um bom (FP), "aprovar todos" custa menos que usar o modelo; só aparece ganho marginal (~1%) com razão ≈ 8:1.
-Ou seja: **com estes dados, o modelo ainda não justifica automação da decisão.**
+Atrasos mais graves ficam um pouco mais "previsíveis", mas com pouquíssimos casos (resultado instável).
 
-## 5. Conclusões e recomendações
-1. Entregamos um pipeline reprodutível e validado corretamente; o baixo desempenho reflete **o limite informacional do cadastro**, não falha de modelagem.
-2. Usar como **score de triagem complementar** (ex.: priorizar análise manual dos decis de maior risco), nunca como decisor único.
-3. **Enriquecer a base:** histórico de bureau, comportamento transacional, relacionamento prévio com o banco.
-4. **Governança:** `IS_MALE` e `AGE_YEARS` entram no modelo – avaliar impacto regulatório/ético (discriminação) antes de produção; definir custos reais FN/FP; monitorar *drift*.
+---
 
-## 6. Como reproduzir
-```bash
-pip install -r requirements.txt
-# coloque application_record.csv e credit_record.csv em data/raw/
-python -m src.data_prep      # gera data/processed/dataset_model.csv
-python -m src.eda            # figuras + testes estatísticos em reports/
-python -m src.train          # treina, avalia, salva models/modelo_campeao.joblib e reports/*
-python -m src.diagnostics    # vazamento e sensibilidade do alvo
+## 6. Principais conclusões
+
+### Em uma frase
+Com os dados do cadastro, **não conseguimos prever com confiança quem será mau pagador**: o melhor modelo ordena os clientes só um pouco melhor que um sorteio.
+
+### O que os resultados significam na prática
+
+1. **O modelo não deve decidir sozinho.** Para detectar cerca de 2 em cada 3 maus pagadores, ele recusaria cerca de 2 em cada 3 bons clientes. Entre os recusados, só ~12% seriam realmente maus, praticamente a taxa geral.
+2. **Pode ajudar a priorizar a análise.** Os 20% de clientes com maior risco previsto têm cerca de **15% de maus pagadores**, contra 11,8% da média. Há algum sinal, mas fraco: serve para **organizar a fila de análise**, não para aprovar ou recusar automaticamente.
+3. **Olhando só pelo custo, ainda não compensa automatizar.** Se aprovar um mau pagador custar até 5 vezes mais do que recusar um bom, é mais barato aprovar todos do que usar o modelo. Só perto de 8 vezes o ganho aparece, e é mínimo.
+4. **Nenhuma característica isolada define o risco.** O atraso depende mais do **comportamento de pagamento** do que do perfil de cadastro.
+5. **Cuidado com resultados "bons demais".** Quem testar com perfis repetidos obtém nota 0,76, mas ela é ilusória (é como dar a prova com as respostas).
+
+### O que mais pesa na previsão (e o que cada variável significa)
+
+| Variável | O que representa | O que observamos |
+|---|---|---|
+| **Idade** (a mais importante) | Idade do solicitante | Mais jovem, um pouco mais de risco: 13,4% de maus entre 20 e 30 anos, contra 10,6% entre 60 e 70 |
+| **Imóvel próprio** | Possui casa/apartamento | Quem tem: 11,1% de maus. Quem não tem: 13,1% |
+| **Carro próprio** | Possui carro | Mesma direção, efeito menor (11,3% × 12,0%) |
+| **Tempo de emprego** | Anos no emprego atual | Efeito pequeno e sem padrão simples |
+| **Gênero** | Masculino/feminino | Pequena diferença (12,7% de maus entre homens, 11,3% entre mulheres). **Atenção ética e regulatória** |
+| **Renda** | Renda anual | **Quase nenhum efeito**: ganhar mais não significou pagar melhor nesta base |
+
+Todas essas diferenças são **pequenas** (1 a 3 pontos percentuais). Elas existem estatisticamente, mas, sozinhas, não bastam para identificar um mau pagador.
+
+### Limitações e próximos passos
+
+- **Falta informação:** incluir histórico em bureaus de crédito, movimentação financeira e relacionamento com o banco é o caminho mais promissor.
+- **O rótulo foi construído por nós** (atraso ≥ 30 dias) e deve ser alinhado à política de risco real da instituição.
+- **Só há resposta para quem já recebeu crédito** (viés de seleção): o modelo não conhece o comportamento de quem foi recusado.
+- **Custos reais** de aprovar um mau pagador e de recusar um bom devem substituir as razões de exemplo usadas na análise de custo.
+- **Ética e regulação:** avaliar o uso de gênero e idade, calibrar as probabilidades, validar em outro período e monitorar o modelo antes de qualquer uso em produção.
+
+---
+
+## 7. Estrutura do repositório
+
 ```
-Notebook narrado e já executado: `notebooks/tech_challenge_fase2.ipynb`.
-
-**Usar o modelo salvo**
-```python
-import joblib, pandas as pd
-m = joblib.load("models/modelo_campeao.joblib")
-score = m["pipeline"].predict_proba(novos_clientes[m["features"]])[:, 1]   # prob. de mau pagador
-recusar = score >= m["threshold"]
+.
+├── .gitignore
+├── CHECKLIST.md
+├── ESTRUTURA.md
+├── README.md
+├── requirements.txt
+├── data
+│   ├── README.md          instruções para baixar o dataset
+│   ├── raw/               dados brutos (não versionados)
+│   └── processed/         gerados pelos notebooks (não versionados)
+├── docs
+│   ├── README.md
+│   ├── apresentacao_executiva.pdf
+│   └── roteiro_video.md
+└── notebooks
+    ├── 01_eda.ipynb
+    ├── 02_preprocessamento.ipynb
+    ├── 03_modelagem.ipynb
+    ├── 04_avaliacao.ipynb
+    └── README.md
 ```
 
-## 7. Estrutura
-```
-├── data/raw/            # CSVs originais (não versionados)
-├── notebooks/           # notebook narrado
-├── src/                 # config, data_prep, eda, train, diagnostics
-├── models/              # modelo campeão (.joblib)
-├── reports/             # métricas (.csv/.json) e figuras
-└── requirements.txt
-```
-> Observação: o enunciado indica o template `drlima/postech-techchallenge-fase2-template`; se o grupo preferir, basta mover estes arquivos para a estrutura dele.
+Detalhes e convenções em [`ESTRUTURA.md`](ESTRUTURA.md).
+Antes de enviar, percorra o [`CHECKLIST.md`](CHECKLIST.md).
+
+---
+
+## 8. Tecnologias
+
+Python 3.11+ (executado em 3.12), pandas 3.0, NumPy 2.4, scikit-learn 1.8 (Pipeline, ColumnTransformer, GridSearchCV, StratifiedGroupKFold),
+SciPy, Matplotlib, Seaborn, joblib e Jupyter Notebook.
